@@ -39,10 +39,12 @@ interface
 
 uses
   Character,
+  Generics.Collections,
   GR32,
   GR32_Paths,
   GR32.Text.Types,
   GR32.Text.FontFace;
+
 
 //------------------------------------------------------------------------------
 //
@@ -104,11 +106,25 @@ type
     CodePoint: Cardinal;
     UnicodeCategory: TUnicodeCategory;
     BreakCategory: TTextBreakCategory;
-    Metrics: TGlyphMetrics32;
   end;
 
   TTextCharacterString = TArray<TTextCharacter>;
 
+  TShapedGlyphProp = record
+    GlyphIndex: integer;
+    //Order: integer;
+    UnicodeCategory: TUnicodeCategory;
+    BreakCategory: TTextBreakCategory;
+    Other: set of (ZeroWidth);
+    Metrics: TGlyphMetrics32;
+  end;
+
+  TShapedGlyphPropArray = TArray<TShapedGlyphProp>;
+
+  ITextShaper = interface
+    procedure ShapeRange(const Text: TTextCharacterString; AStart, ACount: integer;
+               const ATextLayout: TTextLayout; var AShaperProps: TShapedGlyphPropArray; var Order: TArray<integer>);
+  end;
 
 //------------------------------------------------------------------------------
 //
@@ -118,7 +134,9 @@ type
 // The text layout engine
 //------------------------------------------------------------------------------
 type
-  LayoutEngine = record
+
+
+   LayoutEngine = record
 
     //------------------------------------------------------------------------------
     //
@@ -137,7 +155,7 @@ type
     //------------------------------------------------------------------------------
     // Populate a codepoint string with character widths.
     //------------------------------------------------------------------------------
-    class procedure GetGlyphMetrics(var AText: TTextCharacterString; const AFontFace: IFontFace32); static;
+    class procedure GetGlyphMetrics(var AText: TShapedGlyphPropArray; const AFontFace: IFontFace32); static;
 
 
     //------------------------------------------------------------------------------
@@ -150,7 +168,7 @@ type
     // The lines of the broken paragraph is appended to the paragraph list.
     // LineCount specifies the number of entries in the list both before and after.
     //------------------------------------------------------------------------------
-    class procedure BreakParagraph(const AText: TTextCharacterString; const AParagraph: TTextParagraph; AMaxWidth: Single;
+    class procedure BreakParagraph(const AText: TShapedGlyphPropArray; const AParagraph: TTextParagraph; AMaxWidth: Single;
       var AParagraphs: TTextParagraphs; var ALineCount: integer; const ATextLayout: TTextLayout); static;
 
     //------------------------------------------------------------------------------
@@ -161,7 +179,7 @@ type
     // Apply line breaking to a list of paragraphs so no line exceeds the specified
     // max line width.
     //------------------------------------------------------------------------------
-    class function BreakParagraphs(const AText: TTextCharacterString; const AParagraphs: TTextParagraphs; AMaxWidth: Single; const ATextLayout: TTextLayout): TTextParagraphs; static;
+    class function BreakParagraphs(const AText: TShapedGlyphPropArray; const AParagraphs: TTextParagraphs; AMaxWidth: Single; const ATextLayout: TTextLayout): TTextParagraphs; static;
 
 
     //------------------------------------------------------------------------------
@@ -181,7 +199,7 @@ type
     //------------------------------------------------------------------------------
     // Layout text and return as a polygon path.
     //------------------------------------------------------------------------------
-    class procedure TextToPath(const AFontFace: IFontFace32; APath: TCustomPath; var ARect: TFloatRect; const AText: string; ATextLayout: TTextLayout); static;
+    class procedure TextToPath(const AFontFace: IFontFace32; APath: TCustomPath; var ARect: TFloatRect; const AText: string; ATextLayout: TTextLayout; Shaper: ITextShaper); static;
 
   end;
 
@@ -295,7 +313,6 @@ class function LayoutEngine.TextToParagraphs(const AText: string; var AParagraph
       end;
 
       Result[Count].CodePoint := CodePoint;
-      Result[Count].Metrics.Valid := False;
       Result[Count].BreakCategory := TextBreakNoBreak;
 
       Inc(Count);
@@ -445,7 +462,6 @@ class function LayoutEngine.TextToParagraphs(const AText: string; var AParagraph
       SquashedLast := False;
 
       Result[Count].CodePoint := CodePoint;
-      Result[Count].Metrics.Valid := False;
 
       case Result[Count].BreakCategory of
         TextBreakNoBreak:
@@ -533,13 +549,21 @@ end;
 //      GetGlyphMetrics
 //
 //------------------------------------------------------------------------------
-class procedure LayoutEngine.GetGlyphMetrics(var AText: TTextCharacterString; const AFontFace: IFontFace32);
+class procedure LayoutEngine.GetGlyphMetrics(var AText: TShapedGlyphPropArray; const AFontFace: IFontFace32);
 var
   i: integer;
 begin
   for i := 0 to High(AText) do
-    if (not AFontFace.GetGlyphMetrics(AText[i].CodePoint, AText[i].Metrics)) then
-      AText[i].Metrics := Default(TGlyphMetrics32);
+  with AText[i] do
+  begin
+    if (not AFontFace.GetGlyphMetrics(GlyphIndex, Metrics)) then
+       Metrics := Default(TGlyphMetrics32);
+    if ZeroWidth in Other then
+    begin
+       Metrics.AdvanceX := 0;
+       Metrics.AdvanceY := 0;
+    end;
+  end;
 end;
 
 
@@ -548,7 +572,7 @@ end;
 //      BreakParagraphs
 //
 //------------------------------------------------------------------------------
-class procedure LayoutEngine.BreakParagraph(const AText: TTextCharacterString; const AParagraph: TTextParagraph; AMaxWidth: Single;
+class procedure LayoutEngine.BreakParagraph(const AText: TShapedGlyphPropArray; const AParagraph: TTextParagraph; AMaxWidth: Single;
   var AParagraphs: TTextParagraphs; var ALineCount: integer; const ATextLayout: TTextLayout);
 var
   Index: integer;
@@ -605,12 +629,13 @@ begin
     Width := Width + AText[Index].Metrics.AdvanceX;
 
     // Skip left-side-bearing of first character on line
-    if (Paragraph.Count = 0) then
-      Width := Width - AText[Index].Metrics.LeftSideBearing;
+    //if (Paragraph.Count = 0) then     // input is in logical order
+    //  Width := Width - AText[Index].Metrics.LeftSideBearing;
 
     // First char is mandatory. Otherwise, if the first character exceeds the limit, we will end
     // up in an endless loop trying to break the same character again and again.
-    if (Paragraph.Count > 0) and (Width - AText[Index].Metrics.RightSideBearing > AMaxWidth) then
+    //if (Paragraph.Count > 0) and (Width - AText[Index].Metrics.RightSideBearing > AMaxWidth) then
+    if (Paragraph.Count > 0) and (Width > AMaxWidth) then
     begin
       // Width exceded; Step backward until we find a break opportunity.
       // If there is none, before we reach the start of the line, just break
@@ -684,7 +709,7 @@ end;
 //      BreakParagraphs
 //
 //------------------------------------------------------------------------------
-class function LayoutEngine.BreakParagraphs(const AText: TTextCharacterString; const AParagraphs: TTextParagraphs; AMaxWidth: Single; const ATextLayout: TTextLayout): TTextParagraphs;
+class function LayoutEngine.BreakParagraphs(const AText: TShapedGlyphPropArray; const AParagraphs: TTextParagraphs; AMaxWidth: Single; const ATextLayout: TTextLayout): TTextParagraphs;
 var
   LineCount: integer;
   Paragraph: integer;
@@ -707,16 +732,16 @@ end;
 //      TextToPath
 //
 //------------------------------------------------------------------------------
-class procedure LayoutEngine.TextToPath(const AFontFace: IFontFace32; APath: TCustomPath; var ARect: TFloatRect; const AText: string; ATextLayout: TTextLayout);
+class procedure LayoutEngine.TextToPath(const AFontFace: IFontFace32; APath: TCustomPath; var ARect: TFloatRect; const AText: string; ATextLayout: TTextLayout;Shaper: ITextShaper);
 var
   FontFaceMetrics: TFontFaceMetrics32;
   TextPath: TFlattenedPath;
   Paragraphs: TTextParagraphs;
   Lines: TTextParagraphs;
   TextCharacterString: TTextCharacterString;
-  i: Integer;
+  i, j, ii, OutCount: Integer;
   Skip: boolean;
-  X, Y, XMin, XMax, Height: Single;
+  X, Y, XMax, Height: Single;
   ClipRect: TFLoatRect;
   OwnedPath: TFlattenedPath;
   GlyphMetrics: TGlyphMetrics32;
@@ -729,23 +754,38 @@ var
   LineIndex: integer;
   Line: PTextParagraph;
   AdvanceX: Single;
-  LastWidth: Single;
   AlignmentHorizontal: TTextAlignmentHorizontal;
   InterCharCount: integer;
-  ParagraphCount: integer;
+  n: integer;
+  SortList: TArray<integer>;
+  Order: TArray<integer>;
+  ParaShape, GlyphsSeq: TShapedGlyphPropArray;
+  WrapCount, WrapStart: integer;
 const
   OneHalf: Single = 0.5; // Typed constant to avoid Double/Extended
 begin
 
+  AFontFace.GetFontFaceMetrics(ATextLayout, FontFaceMetrics);
+
+
   (*
   ** Parameter validation
   *)
-  if ((ATextLayout.AlignmentHorizontal <> TextAlignHorCenter) and (ARect.Left = ARect.Right)) or
-    ((ATextLayout.AlignmentVertical <> TextAlignVerCenter) and (ARect.Top = ARect.Bottom)) then
-    exit; // No room for anything; Nothing to do
+  if (APath = nil) or (ARect.Right = ARect.Left) or (ARect.Top = ARect.Bottom) then
+  begin
 
-  if (ARect.Left > ARect.Right) or (ARect.Top > ARect.Bottom) then
-    exit; // Negative rect not allowed
+    // Either measuring AText or unbounded
+    ARect.Right := MaxInt;
+    ARect.Bottom := MaxInt;
+
+    // We cannot align without bounds
+    ATextLayout.AlignmentHorizontal := TextAlignHorLeft;
+    ATextLayout.AlignmentVertical := TextAlignVerTop;
+
+    // Disallow wordwrap without bounds
+    ATextLayout.WordWrap := False;
+
+  end;
 
   if (ATextLayout.SingleLine) then
   begin
@@ -761,33 +801,62 @@ begin
   (*
   ** Convert from AText to Unicode codepoints and separate codepoints into paragraphs
   *)
+
   TextCharacterString := LayoutEngine.TextToParagraphs(AText, Paragraphs, ATextLayout);
+  SetLength(Lines, Length(Paragraphs));
+  WrapCount := 0;
+  OutCount := 0;
+  for i := 0 to High(Paragraphs) do
+  with Paragraphs[i] do
+  begin
+    Shaper.ShapeRange(TextCharacterString, StartIndex, Count, ATextLayout, ParaShape, Order);
+    Count := length(ParaShape);
+    StartIndex := 0;
 
+    LayoutEngine.GetGlyphMetrics(ParaShape, AFontFace);
 
-  (*
-  ** Get font and character metrics
-  *)
-  AFontFace.GetFontFaceMetrics(ATextLayout, FontFaceMetrics);
+    WrapStart := WrapCount;
+    if ATextLayout.WordWrap then
+    begin
+      BreakParagraph(ParaShape, Paragraphs[i], ARect.Width, Lines, WrapCount, ATextLayout);
+    end else
+    begin
+      Lines[WrapCount] := Paragraphs[i];
+      inc(WrapCount);
+    end;
+    Setlength(GlyphsSeq, Count + OutCount);
+    if Order = nil then // no reorder needed
+    begin
+        if Count <> 0 then
+           TArray.Copy<TShapedGlyphProp>(ParaShape, GlyphsSeq,  0, OutCount, Count);
+    end else
+    begin
+        for ii := WrapStart to WrapCount-1 do
+        with Lines[ii] do
+        begin
+           SetLength(SortList, Count);
+           for J := StartIndex to LastIndex do
+           begin
+            // SortList[j-StartIndex] := (ShapeInfs[J].Order shl 16 or J);
+             SortList[j-StartIndex] := (Order[J] shl 16 or J);
+           end;
+          TArray.Sort<integer>(SortList);
+          // StartIndex := OutCount;
+           for J := StartIndex to LastIndex do
+           begin
+              GlyphsSeq[OutCount+J] := ParaShape[SortList[j-StartIndex] and $ffff];
+             // inc(OutCount);
+           end;
+        end;
+    end;
 
-  LayoutEngine.GetGlyphMetrics(TextCharacterString, AFontFace);
+    for ii := WrapStart to WrapCount-1 do
+      with Lines[ii] do
+         StartIndex := StartIndex + OutCount;
 
-
-  (*
-  ** Apply kerning
-  *)
-  if (ATextLayout.Kerning) then
-    LayoutEngine.ApplyKerning(AFontFace, TextCharacterString);
-
-  (*
-  ** Word wrap lines
-  *)
-  if (ATextLayout.WordWrap) then
-    Lines := LayoutEngine.BreakParagraphs(TextCharacterString, Paragraphs, ARect.Width, ATextLayout)
-  else
-    Lines := Paragraphs;
-
-  Paragraphs := nil;
-
+     inc(OutCount, Count);
+  end;
+  SetLength(Lines, WrapCount);
 
   OwnedPath := nil;
   try
@@ -842,16 +911,16 @@ begin
       // If line- and paragraph-spacing differs then we need to first
       // count the number of paragraphs and adjust the height according
       // to the difference in line- and paragraph spacing
-      ParagraphCount := 0;
+      n := 0;
       if (LineAdvanceY <> ParagraphAdvanceY) then
       begin
         // Note that the last line is always a paragraph but we treat it as a line.
         for i := 0 to High(Lines)-1 do
           if (Lines[i].IsParagraph) then
-            Inc(ParagraphCount);
+            Inc(n);
 
-        if (ParagraphCount > 0) then
-          Height := Height + ParagraphCount * (ParagraphAdvanceY - LineAdvanceY);
+        if (n > 0) then
+          Height := Height + n * (ParagraphAdvanceY - LineAdvanceY);
       end;
     end else
       Height := 0;
@@ -889,7 +958,6 @@ begin
     // Max line width can't be easily precalculated because of
     // justification, clipping, etc. (and it's easier to just
     // find it inside the loop).
-    XMin := ARect.Right;
     XMax := ARect.Left;
 
     (*
@@ -928,11 +996,11 @@ begin
       begin
 
         for i := Line.StartIndex to Line.LastIndex do
-          Line.Width := Line.Width + TextCharacterString[i].Metrics.AdvanceX;
+          Line.Width := Line.Width + GlyphsSeq[i].Metrics.AdvanceX;
 
         // Remove leftmost LSB and rightmost RSB
-        Line.Width := Line.Width - TextCharacterString[Line.StartIndex].Metrics.LeftSideBearing;
-        Line.Width := Line.Width - TextCharacterString[Line.LastIndex].Metrics.RightSideBearing;
+        Line.Width := Line.Width - GlyphsSeq[Line.StartIndex].Metrics.LeftSideBearing;
+        Line.Width := Line.Width - GlyphsSeq[Line.LastIndex].Metrics.RightSideBearing;
       end;
 
 
@@ -950,7 +1018,10 @@ begin
           case ATextLayout.AlignmentHorizontalLastLine of
             TextAlignHorLastStart:
               // Start alignment relies on LTR/RTL but for now we only support LTR
-              AlignmentHorizontal := TextAlignHorLeft;
+              if ATextLayout.Rtl then
+                 AlignmentHorizontal := TextAlignHorRight
+              else
+                 AlignmentHorizontal := TextAlignHorLeft;
 
             TextAlignHorLastCenter:
               AlignmentHorizontal := TextAlignHorCenter;
@@ -992,10 +1063,10 @@ begin
         SpaceWidth := 0.0;
         InterCharCount := 0;
         for i := Line.StartIndex to Line.LastIndex do
-          if (TextCharacterString[i].UnicodeCategory = TUnicodeCategory.ucSpaceSeparator) then
-            SpaceWidth := SpaceWidth + TextCharacterString[i].Metrics.AdvanceX
+          if (GlyphsSeq[i].UnicodeCategory = TUnicodeCategory.ucSpaceSeparator) then
+            SpaceWidth := SpaceWidth + GlyphsSeq[i].Metrics.AdvanceX
           else
-          if (i > Line.StartIndex) and (TextCharacterString[i-1].UnicodeCategory <> TUnicodeCategory.ucSpaceSeparator) then
+          if (i > Line.StartIndex) and (GlyphsSeq[i-1].UnicodeCategory <> TUnicodeCategory.ucSpaceSeparator) then
             Inc(InterCharCount);
 
 
@@ -1056,40 +1127,36 @@ begin
       if (TextPath <> nil) then
         TextPath.BeginUpdate;
 
-        // Remove LSB from first character so it aligns against the margin
-      if (Line.StartIndex <= Line.LastIndex) then
-      begin
-        if (X < XMin) then
-          XMin := X;
-
-        X := X - TextCharacterString[Line.StartIndex].Metrics.LeftSideBearing;
-      end;
-
       for i := Line.StartIndex to Line.LastIndex do
       begin
+        // Remove LSB from first character so it aligns against the margin
+        if (i = Line.StartIndex) then
+          X := X - GlyphsSeq[i].Metrics.LeftSideBearing;
 
         if (ATextLayout.ClipLayout) then
         begin
           // Clip to left side
-          Skip := (X + TextCharacterString[i].Metrics.AdvanceX < ClipRect.Left);
+          Skip := (X + GlyphsSeq[i].Metrics.AdvanceX < ClipRect.Left);
 
           // Clip to right side
-          if (X - TextCharacterString[i].Metrics.LeftSideBearing > ClipRect.Right) then
+          if (X - GlyphsSeq[i].Metrics.LeftSideBearing > ClipRect.Right) then
             break;
         end else
           Skip := False;
 
-        AdvanceX := TextCharacterString[i].Metrics.AdvanceX;
+        AdvanceX := GlyphsSeq[i].Metrics.AdvanceX;
 
         // Apply horizontal justification
         if (AlignmentHorizontal = TextAlignHorJustify) then
         begin
 
-          if (TextCharacterString[i].UnicodeCategory = TUnicodeCategory.ucSpaceSeparator) then
+          if (GlyphsSeq[i].UnicodeCategory = TUnicodeCategory.ucSpaceSeparator) then
             AdvanceX := AdvanceX * InterWordSpaceFactor
           else
-          if (i < Line.LastIndex) and (TextCharacterString[i+1].UnicodeCategory <> TUnicodeCategory.ucSpaceSeparator) then
-            AdvanceX := AdvanceX + InterCharSpace;
+          if (i < Line.LastIndex) and (GlyphsSeq[i+1].UnicodeCategory <> TUnicodeCategory.ucSpaceSeparator) then
+            AdvanceX := AdvanceX + InterCharSpace
+          else
+            AdvanceX := AdvanceX;
 
         end;
 
@@ -1098,15 +1165,14 @@ begin
         ** Output character glyph
         *)
         if (not Skip) then
-          AFontFace.GetGlyphOutline(TextCharacterString[i].CodePoint, GlyphMetrics, TextPath, X, Y);
+          AFontFace.GetGlyphOutline(GlyphsSeq[i].GlyphIndex, GlyphMetrics, TextPath, X, Y);
 
         // Advance horizontally to next char
         X := X + AdvanceX;
 
-        // Calculate max X excluding RSB
-        LastWidth := X - TextCharacterString[i].Metrics.RightSideBearing;
-        if (LastWidth > XMax) then
-          XMax := LastWidth;
+        if (X > XMax) then
+          // TODO : XMax includes the RSB of the last character. It would be better if it didn't.
+          XMax := X;
       end;
 
 
@@ -1123,20 +1189,20 @@ begin
     ** Horizontally adjust returned output rect
     *)
     case ATextLayout.AlignmentHorizontal of
-
-      TextAlignHorLeft,
-      TextAlignHorJustify:
+      TextAlignHorLeft:
         ARect.Right := XMax;
 
       TextAlignHorCenter:
         begin
-          ARect.Left := XMin;
-          ARect.Right := XMax;
+          ARect.Left := ARect.Left + (ARect.Right - XMax) * OneHalf;
+          ARect.Right := ARect.Left + XMax;
         end;
 
       TextAlignHorRight:
-        ARect.Left := XMin;
+        ARect.Left := ARect.Right - (XMax - ARect.Left);
 
+      TextAlignHorJustify:
+        ;
     end;
 
 
@@ -1151,7 +1217,6 @@ begin
   end;
 end;
 
-
 //------------------------------------------------------------------------------
 //
 //      TextToPath
@@ -1163,7 +1228,7 @@ var
   First, Second: Cardinal;
   Kerning: Single;
 begin
-  Second := TextCharacterString[0].CodePoint;
+  {Second := TextCharacterString[0].CodePoint;
 
   for i := 1 to High(TextCharacterString) do
   begin
@@ -1176,7 +1241,7 @@ begin
     if (Kerning <> 0) then
       TextCharacterString[i-1].Metrics.AdvanceX := TextCharacterString[i-1].Metrics.AdvanceX + Kerning;
 
-  end;
+  end;  }
 end;
 
 //------------------------------------------------------------------------------

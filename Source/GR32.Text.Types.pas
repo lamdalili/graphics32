@@ -61,7 +61,7 @@ const
   DT_WORDBREAK          = $0010;
   DT_SINGLELINE         = $0020;
   DT_NOCLIP             = $0100;
-
+  DT_RTLREADING         = $20000;
   {$NODEFINE DT_LEFT}
   {$NODEFINE DT_CENTER}
   {$NODEFINE DT_RIGHT}
@@ -200,10 +200,11 @@ type
     *)
     ClipLayout: boolean;                // Clip lines/glyphs during layout
     ClipRaster: boolean;                // Clip during path rasterization
-
+    Rtl: boolean;
     // Not implemented
     // CharacterTracking: Single;
     // SpaceTracking: Single;
+    _EnableShaping: boolean;
   end;
 
 var
@@ -250,6 +251,7 @@ var
     *)
     ClipLayout:                 True;
     ClipRaster:                 False;
+    Rtl:                        False;
   );
 
 
@@ -309,6 +311,7 @@ begin
 
   ALayout.WordWrap := (AFlags and DT_WORDBREAK <> 0);
   ALayout.SingleLine := (AFlags and DT_SINGLELINE <> 0);
+  ALayout.Rtl := (AFlags and DT_RTLREADING <> 0);
 end;
 
 //------------------------------------------------------------------------------
@@ -331,6 +334,9 @@ begin
 
   if (ALayout.SingleLine) then
     Result := Result or DT_SINGLELINE;
+
+  if (ALayout.Rtl) then
+    Result := Result or DT_RTLREADING;
 end;
 
 //------------------------------------------------------------------------------

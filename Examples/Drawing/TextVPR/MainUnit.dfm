@@ -2,50 +2,98 @@ object MainForm: TMainForm
   Left = 350
   Top = 156
   Caption = 'Graphics32 Text Rendering'
-  ClientHeight = 509
+  ClientHeight = 533
   ClientWidth = 783
   Color = clBtnFace
   ParentFont = True
+  OldCreateOrder = True
   Position = poScreenCenter
   ShowHint = True
   OnCreate = FormCreate
   OnDestroy = FormDestroy
   OnResize = DoLayoutAndRender
   OnShow = DoLayoutAndRender
-  TextHeight = 15
+  PixelsPerInch = 96
+  TextHeight = 13
   object PnlImage: TPanel
     Left = 341
     Top = 0
     Width = 442
-    Height = 486
+    Height = 510
     Align = alClient
     BevelOuter = bvNone
     ParentBackground = False
     TabOrder = 0
-    object Img: TImage32
+    object ImgPage: TPageControl
       Left = 0
       Top = 0
       Width = 442
-      Height = 486
-      Cursor = crCross
+      Height = 510
+      ActivePage = ViewTab
       Align = alClient
-      Bitmap.ResamplerClassName = 'TNearestResampler'
-      BitmapAlign = baTopLeft
-      Color = clWhite
-      ParentColor = False
-      Scale = 1.000000000000000000
-      ScaleMode = smNormal
       TabOrder = 0
-      OnClick = ImgClick
-      OnMouseMove = ImgMouseMove
-      OnMouseLeave = ImgMouseLeave
+      object ViewTab: TTabSheet
+        Caption = 'View'
+        object Img: TImage32
+          Left = 0
+          Top = 0
+          Width = 434
+          Height = 482
+          Cursor = crCross
+          Align = alClient
+          Bitmap.ResamplerClassName = 'TNearestResampler'
+          BitmapAlign = baTopLeft
+          Color = clWhite
+          ParentColor = False
+          Scale = 1.000000000000000000
+          ScaleMode = smNormal
+          TabOrder = 0
+          OnClick = ImgClick
+          OnMouseMove = ImgMouseMove
+          OnMouseLeave = ImgMouseLeave
+        end
+      end
+      object TextTab: TTabSheet
+        Caption = 'Text'
+        ImageIndex = 1
+        object TxtContent: TMemo
+          Left = 0
+          Top = 0
+          Width = 434
+          Height = 408
+          Align = alClient
+          Lines.Strings = (
+            'Memo1')
+          TabOrder = 0
+        end
+        object Panel1: TPanel
+          Left = 0
+          Top = 408
+          Width = 434
+          Height = 74
+          Align = alBottom
+          Caption = 'Panel1'
+          TabOrder = 1
+          object ReturnAuto: TCheckBox
+            Left = 16
+            Top = 6
+            Width = 97
+            Height = 17
+            Caption = 'Return auto'
+            Checked = True
+            State = cbChecked
+            TabOrder = 0
+            OnClick = ReturnAutoClick
+          end
+        end
+      end
     end
   end
   object PnlControl: TPanel
     Left = 0
     Top = 0
     Width = 341
-    Height = 486
+    Height = 510
     Align = alLeft
     BevelOuter = bvNone
     ParentBackground = False
@@ -54,7 +102,7 @@ object MainForm: TMainForm
       Left = 185
       Top = 0
       Width = 156
-      Height = 486
+      Height = 510
       Align = alClient
       Caption = ' Rendering '
       DoubleBuffered = True
@@ -63,7 +111,7 @@ object MainForm: TMainForm
       TabOrder = 0
       object RadioGroupMethod: TRadioGroup
         Left = 2
-        Top = 150
+        Top = 156
         Width = 152
         Height = 98
         Align = alTop
@@ -76,29 +124,33 @@ object MainForm: TMainForm
         ParentBackground = False
         TabOrder = 0
         OnClick = RadioGroupMethodClick
+        ExplicitTop = 148
       end
       object PnlZoom: TPanel
         Left = 2
-        Top = 248
+        Top = 254
         Width = 152
-        Height = 236
+        Height = 254
         Align = alClient
         BorderWidth = 1
         Caption = ' Rendering '
         ParentBackground = False
         TabOrder = 1
+        ExplicitTop = 246
+        ExplicitHeight = 262
         object PaintBox32: TPaintBox32
           Left = 2
           Top = 2
           Width = 148
-          Height = 212
+          Height = 230
           Align = alClient
           TabOrder = 0
+          ExplicitHeight = 238
         end
         object TrackBarZoom: TTrackBar
           Tag = 10
           Left = 2
-          Top = 214
+          Top = 232
           Width = 148
           Height = 20
           Align = alBottom
@@ -110,21 +162,23 @@ object MainForm: TMainForm
           TickMarks = tmBoth
           TickStyle = tsNone
           OnChange = TrackBarZoomChange
+          ExplicitTop = 240
         end
       end
       object GroupBoxGamma: TGroupBox
         Left = 2
-        Top = 102
+        Top = 108
         Width = 152
         Height = 48
         Align = alTop
         Caption = 'Gamma'
         ParentBackground = False
         TabOrder = 2
+        ExplicitTop = 100
         object TrackBarGamma: TTrackBar
           Tag = 1000
           Left = 2
-          Top = 17
+          Top = 15
           Width = 148
           Height = 20
           Align = alTop
@@ -140,16 +194,16 @@ object MainForm: TMainForm
       end
       object GroupBoxClipping: TGroupBox
         Left = 2
-        Top = 17
+        Top = 15
         Width = 152
-        Height = 85
+        Height = 70
         Align = alTop
         Caption = 'Clipping'
         ParentBackground = False
         TabOrder = 3
         object CheckBoxClipRaster: TCheckBox
           Left = 2
-          Top = 36
+          Top = 34
           Width = 148
           Height = 19
           Align = alTop
@@ -159,7 +213,7 @@ object MainForm: TMainForm
         end
         object CheckBoxClipLayout: TCheckBox
           Left = 2
-          Top = 17
+          Top = 15
           Width = 148
           Height = 19
           Align = alTop
@@ -168,12 +222,28 @@ object MainForm: TMainForm
           OnClick = DoLayoutAndRender
         end
       end
+      object CheckBoxEnableShaping: TCheckBox
+        AlignWithMargins = True
+        Left = 5
+        Top = 88
+        Width = 146
+        Height = 17
+        Align = alTop
+        Caption = 'Enable shaping'
+        Checked = True
+        State = cbChecked
+        TabOrder = 4
+        OnClick = DoLayoutAndRender
+        ExplicitLeft = 8
+        ExplicitTop = 72
+        ExplicitWidth = 97
+      end
     end
     object PanelLeft: TPanel
       Left = 0
       Top = 0
       Width = 185
-      Height = 486
+      Height = 510
       Align = alLeft
       BevelOuter = bvNone
       DoubleBuffered = True
@@ -191,7 +261,7 @@ object MainForm: TMainForm
         TabOrder = 0
         object LblFontInfo: TLabel
           Left = 2
-          Top = 17
+          Top = 15
           Width = 181
           Height = 30
           Align = alTop
@@ -204,7 +274,7 @@ object MainForm: TMainForm
         end
         object ButtonSelectFont: TButton
           Left = 2
-          Top = 47
+          Top = 45
           Width = 181
           Height = 25
           Align = alTop
@@ -215,16 +285,16 @@ object MainForm: TMainForm
       end
       object GroupBoxLayout: TGroupBox
         Left = 0
-        Top = 108
+        Top = 106
         Width = 185
-        Height = 353
+        Height = 379
         Align = alClient
         Caption = ' Layout '
         ParentBackground = False
         TabOrder = 1
         object CheckBoxSingleLine: TCheckBox
           Left = 2
-          Top = 221
+          Top = 219
           Width = 181
           Height = 19
           Align = alTop
@@ -234,7 +304,7 @@ object MainForm: TMainForm
         end
         object CheckBoxWordbreak: TCheckBox
           Left = 2
-          Top = 240
+          Top = 238
           Width = 181
           Height = 19
           Align = alTop
@@ -244,7 +314,7 @@ object MainForm: TMainForm
         end
         object CheckBoxKerning: TCheckBox
           Left = 2
-          Top = 259
+          Top = 257
           Width = 181
           Height = 19
           Align = alTop
@@ -254,7 +324,7 @@ object MainForm: TMainForm
         end
         object GroupBoxAlignHorizontal: TGroupBox
           Left = 2
-          Top = 17
+          Top = 15
           Width = 181
           Height = 48
           Align = alTop
@@ -263,7 +333,7 @@ object MainForm: TMainForm
           TabOrder = 3
           object PanelAlignHor: TPanel
             Left = 2
-            Top = 17
+            Top = 15
             Width = 177
             Height = 26
             Align = alTop
@@ -618,7 +688,7 @@ object MainForm: TMainForm
         end
         object GroupBoxAlignVertical: TGroupBox
           Left = 2
-          Top = 65
+          Top = 63
           Width = 181
           Height = 50
           Align = alTop
@@ -627,7 +697,7 @@ object MainForm: TMainForm
           TabOrder = 4
           object PanelAlignVer: TPanel
             Left = 2
-            Top = 17
+            Top = 15
             Width = 177
             Height = 26
             Align = alTop
@@ -896,7 +966,7 @@ object MainForm: TMainForm
         end
         object GroupBoxJustification: TGroupBox
           Left = 2
-          Top = 115
+          Top = 113
           Width = 181
           Height = 106
           Align = alTop
@@ -905,9 +975,9 @@ object MainForm: TMainForm
           TabOrder = 5
           object PanelJustification: TPanel
             Left = 2
-            Top = 17
+            Top = 15
             Width = 177
-            Height = 78
+            Height = 74
             Align = alTop
             AutoSize = True
             BevelOuter = bvNone
@@ -917,25 +987,25 @@ object MainForm: TMainForm
               Left = 0
               Top = 0
               Width = 177
-              Height = 15
+              Height = 13
               Align = alTop
               Alignment = taCenter
               Caption = 'Inter-character spacing'
-              ExplicitWidth = 122
+              ExplicitWidth = 113
             end
             object Label3: TLabel
               Left = 0
-              Top = 43
+              Top = 41
               Width = 177
-              Height = 15
+              Height = 13
               Align = alTop
               Alignment = taCenter
               Caption = 'Inter-word white-space factor'
-              ExplicitWidth = 157
+              ExplicitWidth = 145
             end
             object Shape1: TShape
               Left = 0
-              Top = 35
+              Top = 33
               Width = 177
               Height = 8
               Align = alTop
@@ -950,7 +1020,7 @@ object MainForm: TMainForm
             object TrackBarInterChar: TTrackBar
               Tag = 100
               Left = 0
-              Top = 15
+              Top = 13
               Width = 177
               Height = 20
               Align = alTop
@@ -965,7 +1035,7 @@ object MainForm: TMainForm
             object TrackBarInterWordMax: TTrackBar
               Tag = 100
               Left = 0
-              Top = 58
+              Top = 54
               Width = 177
               Height = 20
               Align = alTop
@@ -981,10 +1051,20 @@ object MainForm: TMainForm
             end
           end
         end
+        object CheckBoxRTL: TCheckBox
+          Left = 2
+          Top = 276
+          Width = 181
+          Height = 19
+          Align = alTop
+          Caption = 'Rtl'
+          TabOrder = 6
+          OnClick = CheckBoxRTLClick
+        end
       end
       object ButtonExit: TButton
         Left = 0
-        Top = 461
+        Top = 485
         Width = 185
         Height = 25
         Align = alBottom
@@ -997,25 +1077,17 @@ object MainForm: TMainForm
         Left = 0
         Top = 85
         Width = 185
-        Height = 23
+        Height = 21
         Align = alTop
         Style = csDropDownList
-        ItemIndex = 0
         TabOrder = 3
-        Text = 'Lorem ipsum'
-        OnChange = DoLayoutAndRender
-        Items.Strings = (
-          'Lorem ipsum'
-          'Moby Dick'
-          'Don Quixote'
-          'Ma boh'#232'me'
-          #1061#1110#1073#1072' '#1088#1077#1074#1091#1090#1100' '#1074#1086#1083#1080', '#1103#1082' '#1103#1089#1083#1072' '#1087#1086#1074#1085#1110'?')
+        OnChange = ComboBoxExampleChange
       end
     end
   end
   object StatusBar: TStatusBar
     Left = 0
-    Top = 486
+    Top = 510
     Width = 783
     Height = 23
     Panels = <>

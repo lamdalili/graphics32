@@ -227,13 +227,11 @@ type
   private
     class var FKerningComparer: IComparer<TKerningPair>;
 {$endif}
-
   private
     procedure AssignGlyphMetrics(const GlyphMetrics: TGlyphMetrics; var AGlyphMetrics: TGlyphMetrics32; AScale: Single = 1.0);
     procedure CopyGlyphMetrics(const ASource: TGlyphMetrics32; out ADest: TGlyphMetrics32; AScale: Single);
     function GetIsCaching: boolean; {$IFDEF USEINLINING} inline; {$ENDIF}
     property IsCaching: boolean read GetIsCaching;
-
   private
     // IFontFace32
     procedure BeginSession;
@@ -243,7 +241,6 @@ type
     function GetGlyphMetrics(AGlyph: Cardinal; var AGlyphMetrics: TGlyphMetrics32): boolean;
     function GetGlyphOutline(AGlyph: Cardinal; var AGlyphMetrics: TGlyphMetrics32; APath: TCustomPath; AOffsetX: Single = 0; AOffsetY: Single = 0): boolean;
     function GetKerning(AFirstGlyph, ASecondGlyph: Cardinal): Single;
-
   public
     constructor Create(AFont: HFont);
 
@@ -301,6 +298,7 @@ var
 implementation
 
 uses
+  Character,
   Math,
   SysUtils,
   GR32.Text.Unicode;
@@ -356,20 +354,117 @@ end;
 //      TextToolsWin
 //
 //------------------------------------------------------------------------------
+type
+ TWinTextShaper = class(TInterfacedObject, ITextShaper)
+  public
+    DC:HDC;
+    procedure ShapeRange(const Text: TTextCharacterString; AStart, ACount: integer;
+               const ATextLayout: TTextLayout; var AShaperProps: TShapedGlyphPropArray; var Order: TArray<integer>);
+  end;
+
+procedure TWinTextShaper.ShapeRange(const Text: TTextCharacterString; AStart, ACount: integer;
+               const ATextLayout: TTextLayout; var AShaperProps: TShapedGlyphPropArray; var Order: TArray<integer>);
+var
+  Ret: TGCPResults;
+  I, nLen, Last, Curr:integer;
+  nOut, U4Idx: integer;
+  Glys: TArray<Word>;
+  Advs: TArray<integer>;
+  sText: string;
+  U4Text: TCodePoints;
+  NeedReorder: boolean;
+  G: word;
+begin
+  if not ATextLayout._EnableShaping then
+  begin
+      Setlength(AShaperProps, ACount);
+      for I := 0 to  ACount -1 do
+      with AShaperProps[I] do
+      begin
+          if windows.GetGlyphIndices(Dc,@Text[AStart + i].CodePoint, 1, @G, 0) <> GDI_ERROR then
+             GlyphIndex := G;
+          UnicodeCategory := Text[AStart + i].UnicodeCategory;
+          BreakCategory := Text[AStart + i].BreakCategory;
+      end;
+      Order := nil;
+      Exit;
+  end;
+
+  Setlength(U4Text, ACount);
+  for I := 0 to  ACount -1 do
+  begin
+     U4Text[I] := Text[AStart + i].CodePoint;
+  end;
+  sText := Graphics32Unicode.UTF32ToUTF16(U4Text);
+  Setlength(AShaperProps, ACount);
+  nLen := Length(sText);
+  Setlength(Order, nLen);
+  if nLen = 0 then
+     Exit;
+  Setlength(Glys, nLen);
+  Setlength(Advs, nLen);
+  Fillchar(Ret, sizeof(Ret), 0);
+  Ret.lStructSize := sizeof(Ret);
+  Ret.nGlyphs := nLen;
+  Ret.lpGlyphs := @Glys[0];
+  Ret.lpDx := @Advs[0];
+  Ret.lpOrder := @Order[0];
+  if ATextLayout.Rtl then
+     SetTextAlign(Dc, TA_RTLREADING)
+  else
+     SetTextAlign(Dc, 0);
+  GetCharacterPlacement(Dc, @sText[1], nLen, 0, Ret, GCP_REORDER);
+  NeedReorder := False;
+  U4Idx := 0;
+  Last := -1;
+  nOut := 0;
+  for I := 0 to Ret.nMaxFit - 1 do
+  begin
+      Curr := Order[I];
+      if Last <> Curr then
+      with AShaperProps[nOut] do  // pack
+      begin
+          GlyphIndex := Glys[Curr];
+          UnicodeCategory := Text[AStart + U4Idx].UnicodeCategory;
+          BreakCategory := Text[AStart + U4Idx].BreakCategory;
+          Order[nOut] := Curr;
+          Inc(nOut);
+          if not NeedReorder and (Curr < Last)  then
+             NeedReorder := True;
+          Last := Curr;
+          if UnicodeCategory = TUnicodeCategory.ucNonSpacingMark  then
+          begin
+            if Advs[Curr] = 0 then
+               Other := [ZeroWidth];
+          end;
+      end;
+      if not sText.Chars[I].IsLowSurrogate then
+        inc(U4Idx);
+  end;
+  Setlength(AShaperProps,nOut);
+  if not NeedReorder then
+     Order := nil;
+end;
+
+
 class procedure TextToolsWin.TextToPath(AFont: HFont; APath: TCustomPath; const ARect: TFloatRect; const AText: string; const ALayout: TTextLayout);
 var
   R: TFloatRect;
   FontFace: IFontFace32;
+  F: TFontFace32;
+  Shaper: TWinTextShaper;
 begin
-  FontFace := TFontFace32.Create(AFont);
-
+  f := TFontFace32.Create(AFont);
+  FontFace := f;
   FontFace.BeginSession;
-
+  Shaper := TWinTextShaper.Create;
+  Shaper.DC:= f.FFontData.FontDC;
   R := ARect;
 
-  LayoutEngine.TextToPath(FontFace, APath, R, AText, ALayout);
+  LayoutEngine.TextToPath(FontFace, APath, R, AText, ALayout, Shaper);
 
   FontFace.EndSession;
+
 end;
 
 class procedure TextToolsWin.TextToPath(AFont: HFont; APath: TCustomPath; const ARect: TFloatRect; const AText: string; AFlags: Cardinal);
@@ -392,7 +487,7 @@ begin
 
   FontFace := TFontFace32.Create(AFont);
 
-  LayoutEngine.TextToPath(FontFace, nil, Result, AText, ALayout);
+ // LayoutEngine.TextToPath(FontFace, nil, Result, AText, ALayout);
 end;
 
 class function TextToolsWin.MeasureText(AFont: HFont; const ARect: TFloatRect; const AText: string; AFlags: Cardinal): TFloatRect;
@@ -402,7 +497,7 @@ begin
   TextLayout := DefaultTextLayout;
   TextFlagsToLayout(AFlags, TextLayout);
 
-  Result := MeasureText(AFont, ARect, AText, TextLayout);
+ // Result := MeasureText(AFont, ARect, AText, TextLayout);
 end;
 
 //------------------------------------------------------------------------------
@@ -736,7 +831,7 @@ begin
     ** Get metrics from Windows
     *)
     GlyphMetrics := Default(TGlyphMetrics);
-    Res := Windows.GetGlyphOutline(FFontData.FontDC, AGlyph, GGO_METRICS, GlyphMetrics, 0, nil, VertFlip_mat2);
+    Res := Windows.GetGlyphOutline(FFontData.FontDC, AGlyph, GGO_METRICS or GGO_GLYPH_INDEX, GlyphMetrics, 0, nil, VertFlip_mat2);
 
     if (Res = GDI_ERROR) then
     begin
@@ -955,7 +1050,7 @@ begin
     (*
     ** Get bezier data (and the glyph metrics) from Windows
     *)
-    PolygonHeaderSize := Windows.GetGlyphOutline(FFontData.FontDC, AGlyph, GGO_NATIVE or GGO_UNHINTED, GlyphMetrics, 0, nil, VertFlip_mat2);
+    PolygonHeaderSize := Windows.GetGlyphOutline(FFontData.FontDC, AGlyph, GGO_NATIVE or GGO_UNHINTED or GGO_GLYPH_INDEX, GlyphMetrics, 0, nil, VertFlip_mat2);
 
     Result := (PolygonHeaderSize <> GDI_ERROR) and (PolygonHeaderSize <> 0);
     if (not Result) then
@@ -965,7 +1060,7 @@ begin
     try
 
       PolygonHeader := PolygonHeaderAlloc;
-      PolygonHeaderSize := Windows.GetGlyphOutline(FFontData.FontDC, AGlyph, GGO_NATIVE or GGO_UNHINTED, GlyphMetrics, PolygonHeaderSize, PolygonHeader, VertFlip_mat2);
+      PolygonHeaderSize := Windows.GetGlyphOutline(FFontData.FontDC, AGlyph, GGO_NATIVE or GGO_UNHINTED or GGO_GLYPH_INDEX, GlyphMetrics, PolygonHeaderSize, PolygonHeader, VertFlip_mat2);
 
       if (PolygonHeaderSize = GDI_ERROR) or (PolygonHeader.dwType <> TT_POLYGON_TYPE) then
         exit;
@@ -1280,6 +1375,7 @@ begin
 {$endif}
     Result := FKerningPairs[KerningIndex].iKernAmount * FFontData.Scale;
 end;
+
 
 //------------------------------------------------------------------------------
 

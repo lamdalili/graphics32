@@ -1,0 +1,27 @@
+﻿// Mixed breaks and No-break spaces
+Ma{#$00A0}bohème{#$2028}
+Arthur{#$00A0}Rimbaud{#$2029}
+// Unicode line separators
+Je m’en allais, les poings dans mes poches crevées{#$00A0};{#$2028}
+Mon paletot aussi devenait idéal{#$00A0};{#$2028}
+J’allais sous le ciel, Muse{#$00A0}! et j’étais ton féal ;{#$2028}
+Oh{#$00A0}! là{#$00A0}! là{#$00A0}! que d’amours splendides j’ai rêvées{#$00A0}!
+//Paragraph separator
+{#$2029}
+// ASCII line separators
+Mon unique culotte avait un large trou.{#13}
+–{#$00A0}Petit-Poucet rêveur, j’égrenais dans ma course{#13}
+Des rimes. Mon auberge était à la Grande-Ourse.{#13}
+–{#$00A0}Mes étoiles au ciel avaient un doux frou-frou
+// Double line break
+{#10}{#10}
+// ASCII line separators
+Et je les écoutais, assis au bord des routes,{#10}
+Ces bons soirs de septembre où je sentais des gouttes{#10}
+De rosée à mon front, comme un vin de vigueur{#$00A0};
+// Double line break
+{#13}{#13}
+// ASCII line separators
+Où, rimant au milieu des ombres fantastiques,{#13#10}
+Comme des lyres, je tirais les élastiques{#13#10}
+De mes souliers blessés, un pied près de mon coeur{#$00A0}!
